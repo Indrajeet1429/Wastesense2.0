@@ -1,14 +1,17 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from database.models import Machine, Workload, ResourceMeasurement, WasteEvent
+from database.models import (
+    Machine,
+    Workload,
+    ResourceMeasurement,
+    WasteEvent,
+)
 from database.session import SessionLocal
 
 
 def test_database_relationship_flow():
     db = SessionLocal()
-
-    machine = None
 
     try:
         machine = Machine(
@@ -52,15 +55,22 @@ def test_database_relationship_flow():
         )
         db.add(waste_event)
 
-        db.commit()
+        # Send pending inserts to PostgreSQL without committing.
+        db.flush()
 
         assert machine.machine_id is not None
         assert workload.workload_id is not None
         assert measurement.measurement_id is not None
         assert waste_event.waste_id is not None
 
-    finally:
-        if machine is not None and machine.machine_id is not None:
-            db.rollback()
+        # Verify the relationships between the records.
+        assert workload.machine_id == machine.machine_id
+        assert measurement.machine_id == machine.machine_id
+        assert measurement.workload_id == workload.workload_id
+        assert waste_event.machine_id == machine.machine_id
+        assert waste_event.workload_id == workload.workload_id
 
+    finally:
+        # Undo all changes made by this test.
+        db.rollback()
         db.close()
