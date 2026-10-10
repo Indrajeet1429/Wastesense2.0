@@ -114,20 +114,12 @@ def validate_usage_data(df: pd.DataFrame) -> dict:
         (df["cpu_usage"] == 0).sum()
     )
 
-    results["cpu_infinite"] = int(
-        (~pd.Series(
-            pd.api.types.is_numeric_dtype(df["cpu_usage"])
-            for _ in [0]
-        )).sum()
-    )
-
-    # Check actual infinite values separately.
+    # Count actual infinite values, separately from missing values.
     results["cpu_infinite_values"] = int(
-        (~df["cpu_usage"].replace(
-            [float("inf"), float("-inf")],
-            pd.NA
-        ).notna()).sum()
+        df["cpu_usage"].isin([float("inf"), float("-inf")]).sum()
     )
+    # Keep the existing result key for compatibility.
+    results["cpu_infinite"] = results["cpu_infinite_values"]
 
     # --------------------------------------------------
     # 8. Memory validation
@@ -141,10 +133,7 @@ def validate_usage_data(df: pd.DataFrame) -> dict:
     )
 
     results["memory_infinite_values"] = int(
-        (~df["memory_usage"].replace(
-            [float("inf"), float("-inf")],
-            pd.NA
-        ).notna()).sum()
+        df["memory_usage"].isin([float("inf"), float("-inf")]).sum()
     )
 
     # --------------------------------------------------
