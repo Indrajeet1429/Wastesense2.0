@@ -262,137 +262,6 @@ def detect_waste_persistence(
 
 
 
-def analyze_root_cause(
-    waste_analysis: Mapping[str, Any],
-    workload_context: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    """
-    Generate evidence-based root-cause hypotheses from waste signals.
-
-    Results are hypotheses, not proof of causation.
-    Optional context is used only when explicitly supplied.
-    """
-    fingerprint = build_waste_fingerprint(waste_analysis)
-    context = workload_context or {}
-
-    if not isinstance(context, Mapping):
-        raise ValueError("workload_context must be a mapping.")
-
-    hypotheses = []
-    evidence = []
-
-    cpu_signal = fingerprint["signals"]["cpu_normalized_adjusted_excess"]
-    memory_signal = fingerprint["signals"]["memory_normalized_adjusted_excess"]
-
-    if fingerprint["fingerprint_type"] == "no_adjusted_excess":
-        hypotheses.append({
-            "hypothesis": "No excess above the configured noise floors",
-            "confidence": "not_assessed",
-            "reason": (
-                "Neither CPU nor memory has positive adjusted excess "
-                "under the current heuristic thresholds."
-            ),
-        })
-    elif fingerprint["fingerprint_type"] == "cpu_dominant":
-        hypotheses.append({
-            "hypothesis": "CPU-dominant excess",
-            "confidence": "signal_supported",
-            "reason": (
-                "The normalized, uncertainty-adjusted CPU excess "
-                "is substantially larger than the memory excess."
-            ),
-        })
-    elif fingerprint["fingerprint_type"] == "memory_dominant":
-        hypotheses.append({
-            "hypothesis": "Memory-dominant excess",
-            "confidence": "signal_supported",
-            "reason": (
-                "The normalized, uncertainty-adjusted memory excess "
-                "is substantially larger than the CPU excess."
-            ),
-        })
-    else:
-        hypotheses.append({
-            "hypothesis": "Combined CPU and memory excess",
-            "confidence": "signal_supported",
-            "reason": (
-                "Both resources have adjusted excess of similar magnitude."
-            ),
-        })
-
-    evidence.append({
-        "observation": "CPU normalized adjusted excess",
-        "value": cpu_signal,
-        "source": "Phase 6 waste analysis",
-    })
-    evidence.append({
-        "observation": "Memory normalized adjusted excess",
-        "value": memory_signal,
-        "source": "Phase 6 waste analysis",
-    })
-
-    context_rules = [
-        (
-            "active_tasks",
-            "Workload task count is available",
-            "The supplied active task count describes workload quantity, "
-            "but does not establish whether the workload needed the resources.",
-        ),
-        (
-            "workload_stability_15min",
-            "Workload stability feature is available",
-            "This feature may help assess workload variation; it does not "
-            "prove that excess resource usage is unnecessary.",
-        ),
-        (
-            "headroom_imbalance",
-            "Resource headroom imbalance feature is available",
-            "This feature may help describe an imbalance between CPU and "
-            "memory headroom, but does not establish its cause.",
-        ),
-        (
-            "cpu_memory_utilization_gap",
-            "CPU-memory utilization gap is available",
-            "This gap describes a difference between resource utilization "
-            "levels and is not independently evidence of waste.",
-        ),
-    ]
-
-    for field, label, interpretation in context_rules:
-        if field not in context:
-            continue
-
-        value = context[field]
-        try:
-            numeric_value = float(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{field} must be a finite number.") from exc
-
-        if not math.isfinite(numeric_value):
-            raise ValueError(f"{field} must be a finite number.")
-
-        evidence.append({
-            "observation": label,
-            "field": field,
-            "value": numeric_value,
-            "interpretation": interpretation,
-        })
-
-    return {
-        "status": "root_cause_hypotheses_generated",
-        "fingerprint_type": fingerprint["fingerprint_type"],
-        "waste_score": fingerprint["waste_score"],
-        "severity": fingerprint["severity"],
-        "hypotheses": hypotheses,
-        "evidence": evidence,
-        "root_cause_confirmed": False,
-        "limitations": [
-            "These are rule-based hypotheses, not confirmed causal explanations.",
-            "CPU and memory model accuracy is limited.",
-            "Workload context is optional and is not inferred when missing.",
-            "Confirming root causes requires additional evidence or controlled experiments.",
-        ],
-    }
 
 
 def analyze_root_cause(
@@ -406,7 +275,7 @@ def analyze_root_cause(
     Optional context is used only when explicitly supplied.
     """
     fingerprint = build_waste_fingerprint(waste_analysis)
-    context = workload_context or {}
+    context = {} if workload_context is None else workload_context
 
     if not isinstance(context, Mapping):
         raise ValueError("workload_context must be a mapping.")
