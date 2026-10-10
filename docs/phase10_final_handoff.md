@@ -38,3 +38,20 @@
 ## Completion Statement
 
 The planned Phase 10 evaluation and documentation steps have been carried out based on the available artifacts and reported test results. This handoff records the evidence and limitations; it does not guarantee perfect accuracy or real-world effectiveness.
+
+## Final Inference Interface Integration
+
+The machine-time inference interface in `ml/pipeline/inference.py` now connects the existing resource prediction, waste detection, savings estimation, root-cause hypothesis, and recommendation components.
+
+Validation performed:
+- All five CatBoost model artifacts loaded successfully and matched their expected feature counts.
+- `scripts/test_inference_integration.py`: 2 tests passed.
+- When actual CPU and memory measurements are absent, waste analysis is reported as unavailable rather than fabricated.
+- Persistence analysis requires explicitly supplied observation history and a maximum time-gap setting.
+- Power prediction remains unavailable in the machine-time interface because it requires aggregated PDU-time features.
+
+Limitations:
+- CPU and memory evaluation results remain mixed.
+- Root-cause outputs are hypotheses, not confirmed causes.
+- Estimated savings are not proof of realized savings.
+- These tests do not establish production readiness or real-world accuracy.

@@ -7,6 +7,14 @@ from typing import Any, Mapping
 import numpy as np
 import pandas as pd
 from catboost import CatBoostRegressor
+from ml.pipeline.waste_detection import analyze_resource_waste
+from ml.pipeline.savings_estimator import estimate_savings
+from ml.pipeline.waste_intelligence import (
+    build_waste_fingerprint,
+    detect_waste_persistence,
+    analyze_root_cause,
+)
+from ml.pipeline.recommendations import generate_recommendations_from_analysis
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -126,62 +134,89 @@ def _predict_resource(
 
 
 def analyze_workload(input_data: Mapping[str, Any]) -> dict[str, Any]:
-    """
-    Predict expected CPU and memory for one machine-time workload.
-
-    Required:
-        All RESOURCE_FEATURES.
-
-    Optional:
-        actual_cpu, actual_memory.
-
-    Power prediction is deliberately not performed here because the power
-    model operates on aggregated PDU-time rows, not individual machines.
-    """
+    """Predict expected resources and optionally analyze observed resource use."""
     if not isinstance(input_data, Mapping):
         raise TypeError("input_data must be a mapping, such as a dictionary.")
 
-    cpu_model = _load_model(
-        "expected_resource_cpu.cbm",
-        RESOURCE_FEATURES,
-    )
-    memory_model = _load_model(
-        "expected_resource_memory.cbm",
-        RESOURCE_FEATURES,
-    )
+    cpu_model = _load_model("expected_resource_cpu.cbm", RESOURCE_FEATURES)
+    memory_model = _load_model("expected_resource_memory.cbm", RESOURCE_FEATURES)
 
-    cpu = _predict_resource(
-        cpu_model,
-        input_data,
-        "cpu",
-        input_data.get("actual_cpu"),
-    )
+    cpu = _predict_resource(cpu_model, input_data, "cpu", input_data.get("actual_cpu"))
     memory = _predict_resource(
-        memory_model,
-        input_data,
-        "memory",
-        input_data.get("actual_memory"),
+        memory_model, input_data, "memory", input_data.get("actual_memory")
     )
 
-    return {
+    result = {
         "status": "prediction_completed",
         "prediction_level": "machine-time",
-        "resources": {
-            "cpu": cpu,
-            "memory": memory,
-        },
+        "resources": {"cpu": cpu, "memory": memory},
         "power": {
             "status": "not_predicted",
             "reason": (
-                "Power prediction requires aggregated PDU-time features. "
-                "Use the dedicated PDU-time interface when implemented."
+                "Power prediction requires aggregated PDU-time features; "
+                "this interface predicts resources at machine-time level."
             ),
         },
         "waste_analysis": {
-            "status": "not_implemented",
-            "reason": (
-                "Waste scores, root causes, persistence, and savings "
-                "must be added and validated in later stages."
-            ),
+            "status": "not_available",
+            "reason": "Both actual_cpu and actual_memory are required.",
         },
+        "waste_fingerprint": {"status": "not_available"},
+        "persistence_analysis": {
+            "status": "not_run",
+            "reason": "Waste analysis and explicit observation history are required.",
+        },
+        "root_cause_analysis": {"status": "not_run"},
+        "savings_estimate": {"status": "not_available"},
+        "recommendations": {"status": "not_run"},
     }
+
+    if input_data.get("actual_cpu") is None or input_data.get("actual_memory") is None:
+        return result
+
+    waste = analyze_resource_waste(
+        actual_cpu=cpu["actual"],
+        expected_cpu=cpu["expected"],
+        cpu_capacity=input_data["cpu_capacity"],
+        actual_memory=memory["actual"],
+        expected_memory=memory["expected"],
+        memory_capacity=input_data["memory_capacity"],
+    )
+    result["waste_analysis"] = waste
+    result["waste_fingerprint"] = build_waste_fingerprint(waste)
+
+    savings_input = dict(input_data)
+    savings_input["expected_cpu"] = cpu["expected"]
+    savings_input["expected_memory"] = memory["expected"]
+    result["savings_estimate"] = estimate_savings(savings_input)
+
+    root_cause = analyze_root_cause(
+        waste,
+        workload_context=input_data.get("workload_context"),
+    )
+    result["root_cause_analysis"] = root_cause
+
+    persistence = None
+    if "persistence_observations" in input_data:
+        if "max_gap_seconds" not in input_data:
+            raise ValueError(
+                "max_gap_seconds is required with persistence_observations."
+            )
+        persistence = detect_waste_persistence(
+            input_data["persistence_observations"],
+            max_gap_seconds=input_data["max_gap_seconds"],
+            score_threshold=input_data.get("score_threshold", 5.0),
+            minimum_observations=input_data.get("minimum_observations", 3),
+        )
+        result["persistence_analysis"] = persistence
+
+    recommendation_input = dict(input_data)
+    recommendation_input["expected_cpu"] = cpu["expected"]
+    recommendation_input["expected_memory"] = memory["expected"]
+    result["recommendations"] = generate_recommendations_from_analysis(
+        recommendation_input,
+        waste,
+        persistence_analysis=persistence,
+        root_cause_analysis=root_cause,
+    )
+    return result
