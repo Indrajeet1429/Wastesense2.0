@@ -1,0 +1,67 @@
+
+{
+  "phase": "Phase 5 - Expected Resource Modeling",
+  "status": "IN_PROGRESS",
+  "dataset": "data/processed/training/machine_resource_features_final_power_pdu.csv",
+  "split_method": "Chronological 70% train, 15% validation, 15% test",
+  "hardware": "NVIDIA RTX 4050 Laptop GPU using CatBoost GPU training",
+  "model_selection": {
+    "cpu": {
+      "selected_candidate": "expected_resource_cpu.cbm",
+      "test_mae": 0.0080161673,
+      "baseline_test_mae": 0.0080063398,
+      "test_rmse": 0.0142775316,
+      "test_r2": 0.1458972,
+      "decision": "Retain as a candidate only; test MAE is slightly worse than the baseline."
+    },
+    "memory": {
+      "selected_candidate": "expected_resource_memory.cbm",
+      "test_mae": 0.0038315691,
+      "baseline_test_mae": 0.0038369392,
+      "test_rmse": 0.0078609932,
+      "test_r2": 0.0360591,
+      "decision": "Retain as a candidate only; MAE improvement over baseline is marginal."
+    },
+    "power": {
+      "selected_candidate": "expected_resource_power.cbm",
+      "test_mae": 0.0050330698,
+      "baseline_test_mae": 0.0379695324,
+      "test_rmse": 0.0064896590,
+      "test_r2": 0.8991268,
+      "test_rows": 85,
+      "decision": "Candidate for absolute PDU-time power estimation; temporal change tracking is not validated."
+    }
+  },
+  "log_target_experiments": {
+    "cpu": "Did not improve held-out test MAE over the original model.",
+    "memory": "Only marginally improved held-out test MAE; no meaningful gain established."
+  },
+  "power_temporal_evaluation": {
+    "change_observations": 80,
+    "model_change_mae": 0.0036221,
+    "no_change_baseline_mae": 0.0012875,
+    "decision": "Model performs worse than the no-change baseline for power-change prediction."
+  },
+  "inference_validation": {
+    "machine_time_cpu_memory": "Passed current functional and input-validation tests.",
+    "pdu_time_power": "Passed synthetic and real-data interface tests.",
+    "artifact_loading": "All five local model artifacts loaded and matched expected feature counts."
+  },
+  "limitations": [
+    "CPU and memory predictive performance is weak.",
+    "Power test set contains only 85 PDU-time observations.",
+    "Only 17 held-out timestamps are available per PDU.",
+    "Functional inference tests do not establish predictive accuracy.",
+    "No validated waste score, root-cause analysis, or savings estimate is implemented in this phase."
+  ],
+  "completion_status": {
+    "phase5_complete": false,
+    "phase6_authorized": false,
+    "remaining": [
+      "Review final model-selection policy.",
+      "Consolidate and reproduce final evaluation checks.",
+      "Complete final inference integration validation.",
+      "Commit and push approved Phase 5 files."
+    ]
+  }
+}
