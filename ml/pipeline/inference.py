@@ -15,6 +15,8 @@ from ml.pipeline.waste_intelligence import (
     analyze_root_cause,
 )
 from ml.pipeline.recommendations import generate_recommendations_from_analysis
+from ml.pipeline.waste_replay import replay_observations
+from ml.pipeline.power_inference import predict_expected_power
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -169,7 +171,14 @@ def analyze_workload(input_data: Mapping[str, Any]) -> dict[str, Any]:
         "root_cause_analysis": {"status": "not_run"},
         "savings_estimate": {"status": "not_available"},
         "recommendations": {"status": "not_run"},
+        "replay": {
+            "status": "not_run",
+            "reason": "Supply replay_observations and optimization_fraction to run a hypothetical replay.",
+        },
     }
+
+    if "power_input" in input_data:
+        result["power"] = predict_expected_power(input_data["power_input"])
 
     if input_data.get("actual_cpu") is None or input_data.get("actual_memory") is None:
         return result
@@ -219,4 +228,15 @@ def analyze_workload(input_data: Mapping[str, Any]) -> dict[str, Any]:
         persistence_analysis=persistence,
         root_cause_analysis=root_cause,
     )
+
+    if "replay_observations" in input_data:
+        if "optimization_fraction" not in input_data:
+            raise ValueError(
+                "optimization_fraction is required with replay_observations."
+            )
+        result["replay"] = replay_observations(
+            input_data["replay_observations"],
+            optimization_fraction=input_data["optimization_fraction"],
+        )
+
     return result
